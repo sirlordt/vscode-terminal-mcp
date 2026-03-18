@@ -1,0 +1,104 @@
+{
+  "name": "vscode-terminal-mcp",
+  "displayName": "Terminal MCP Server",
+  "description": "MCP server that provides visible terminal sessions in VSCode for Claude Code and subagents",
+  "version": "0.1.0",
+  "publisher": "terminal-mcp",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.99.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "mcpServers": {
+      "vscode-terminal-mcp": {
+        "type": "stdio",
+        "command": "node",
+        "args": [
+          "${extensionPath}/dist/mcp-entry.js"
+        ]
+      }
+    },
+    "configuration": {
+      "title": "Terminal MCP",
+      "properties": {
+        "terminalMcp.blockedCommands": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "rm -rf /",
+            "mkfs",
+            "dd if=",
+            ":(){ :|:& };:"
+          ],
+          "description": "Commands that are never allowed to execute"
+        },
+        "terminalMcp.allowedDirectories": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Allowed working directories (empty = unrestricted)"
+        },
+        "terminalMcp.defaultTimeoutMs": {
+          "type": "number",
+          "default": 30000,
+          "description": "Default timeout for command execution in milliseconds"
+        },
+        "terminalMcp.maxConcurrentSessions": {
+          "type": "number",
+          "default": 10,
+          "description": "Maximum number of concurrent terminal sessions"
+        },
+        "terminalMcp.maxOutputLines": {
+          "type": "number",
+          "default": 10000,
+          "description": "Maximum number of output lines to buffer per session"
+        },
+        "terminalMcp.idleTimeoutMs": {
+          "type": "number",
+          "default": 300000,
+          "description": "Auto-close idle sessions after this many milliseconds (0 = disabled)"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "build": "node esbuild.config.mjs",
+    "watch": "node esbuild.config.mjs --watch",
+    "lint": "eslint src/ --ext .ts",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "package": "vsce package"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.9.0",
+    "strip-ansi": "^7.1.0",
+    "uuid": "^9.0.0",
+    "zod": "^3.24.0",
+    "zod-to-json-schema": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.0",
+    "@types/uuid": "^9.0.0",
+    "@types/vscode": "^1.99.0",
+    "@vscode/test-electron": "^2.4.0",
+    "@vscode/vsce": "^2.26.0",
+    "esbuild": "^0.21.0",
+    "eslint": "^8.57.0",
+    "prettier": "^3.2.0",
+    "typescript": "^5.4.0",
+    "vitest": "^1.6.0"
+  }
+}
