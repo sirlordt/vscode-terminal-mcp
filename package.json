@@ -3,8 +3,28 @@
   "displayName": "Terminal MCP Server",
   "description": "MCP server that provides visible terminal sessions in VSCode for Claude Code and subagents",
   "version": "0.1.0",
-  "publisher": "terminal-mcp",
+  "publisher": "sirlordt",
   "license": "MIT",
+  "author": "sirlordt",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sirlordt/vscode-terminal-mcp.git"
+  },
+  "homepage": "https://github.com/sirlordt/vscode-terminal-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/sirlordt/vscode-terminal-mcp/issues"
+  },
+  "keywords": [
+    "mcp",
+    "terminal",
+    "vscode",
+    "claude",
+    "claude-code",
+    "model-context-protocol",
+    "ai-tools"
+  ],
+  "mcpName": "io.github.sirlordt/vscode-terminal-mcp",
+  "icon": "icon.png",
   "engines": {
     "vscode": "^1.99.0"
   },
