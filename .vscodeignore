@@ -6,3 +6,7 @@ node_modules/**
 tsconfig.json
 esbuild.config.mjs
 **/*.map
+.mcpregistry_*
+.npmrc
+.npmignore
+.gitignore
