@@ -28,6 +28,8 @@ export class TerminalSession {
   private shellExecutionDisposable: vscode.Disposable | null = null;
   private isActive = true;
   private lastCommandAt?: number;
+  private shellReady: Promise<void>;
+  private resolveShellReady!: () => void;
 
   constructor(config: TerminalSessionConfig, maxOutputLines: number) {
     this.sessionId = generateSessionId();
@@ -49,11 +51,34 @@ export class TerminalSession {
       terminalOptions.shellPath = config.shell;
     }
 
+    this.shellReady = new Promise<void>((resolve) => {
+      this.resolveShellReady = resolve;
+    });
+
     this.terminal = vscode.window.createTerminal(terminalOptions);
     this.terminal.show(true); // Show but don't take focus
 
     // Setup shell integration output capture
     this.setupShellIntegrationCapture();
+
+    // Wait for shell integration to activate, or fallback timeout
+    if (vscode.window.onDidChangeTerminalShellIntegration) {
+      const disposable = vscode.window.onDidChangeTerminalShellIntegration((e) => {
+        if (e.terminal === this.terminal) {
+          disposable.dispose();
+          log(`Shell integration ready for session ${this.sessionId}`);
+          this.resolveShellReady();
+        }
+      });
+      // Fallback: resolve after 3s if shell integration never fires
+      setTimeout(() => {
+        disposable.dispose();
+        this.resolveShellReady();
+      }, 3000);
+    } else {
+      // No shell integration API: wait a fixed delay
+      setTimeout(() => this.resolveShellReady(), 1500);
+    }
 
     log(`Session ${this.sessionId} created: ${config.name} (cwd: ${this.cwd})`);
   }
@@ -117,6 +142,9 @@ export class TerminalSession {
     timedOut: boolean;
     durationMs: number;
   }> {
+    // Wait for shell to be ready before first command
+    await this.shellReady;
+
     const commandId = generateCommandId();
     const startedAt = Date.now();
     this.lastCommandAt = startedAt;

@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 /**
  * MCP Entry Point (stdio-to-IPC bridge)
  *

@@ -10,3 +10,5 @@ test/
 vitest.config.ts
 esbuild.config.mjs
 tsconfig.json
+.mcpregistry_*
+.npmrc
