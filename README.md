@@ -202,6 +202,58 @@ This prevents conversation timeouts and lets the user watch progress in the term
 | Session state | Each command is isolated | Persistent sessions with history |
 | Interactive commands | Not supported | Send input to prompts/REPLs |
 
+## Development: Updating the Extension
+
+VSCode aggressively caches extensions in memory. When developing locally, `code --install-extension` and even "Developer: Reload Window" may **not** reload your changes. Use this workflow:
+
+### Quick update (no restart needed)
+
+After modifying source files, build and copy directly into the installed extension directory:
+
+```bash
+cd /path/to/vscode-terminal-mcp
+npm run build
+cp dist/extension.js ~/.vscode/extensions/sirlordt.vscode-terminal-mcp-<version>/dist/extension.js
+```
+
+Then run **"Developer: Reload Window"** (`Ctrl+Shift+P`).
+
+### Full reinstall (when quick update doesn't work)
+
+If VSCode still uses old code:
+
+```bash
+# 1. Uninstall and remove all copies
+code --uninstall-extension sirlordt.vscode-terminal-mcp
+rm -rf ~/.vscode/extensions/sirlordt.vscode-terminal-mcp-*
+
+# 2. Check for ghost entries with old publisher names
+# Look in ~/.vscode/extensions/extensions.json for stale entries
+# Remove any entries with old publisher IDs (e.g., "terminal-mcp.vscode-terminal-mcp")
+
+# 3. Close VSCode completely (not just reload)
+
+# 4. Rebuild and install
+npm run build
+npx vsce package --allow-missing-repository
+code --install-extension vscode-terminal-mcp-<version>.vsix --force
+
+# 5. Open VSCode
+```
+
+### Verify the correct version is loaded
+
+```bash
+# Check which extension directories exist
+ls ~/.vscode/extensions/ | grep terminal
+
+# Verify your changes are in the installed extension
+grep "YOUR_UNIQUE_STRING" ~/.vscode/extensions/sirlordt.vscode-terminal-mcp-*/dist/extension.js
+
+# Compare checksums
+md5sum dist/extension.js ~/.vscode/extensions/sirlordt.vscode-terminal-mcp-*/dist/extension.js
+```
+
 ## How It Works
 
 1. The **VSCode extension** activates and starts an IPC server on a Unix socket
