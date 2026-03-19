@@ -10,7 +10,7 @@ const sharedOptions = {
   format: "cjs",
   sourcemap: true,
   minify: false,
-  external: ["vscode"],
+  external: ["vscode", "node-pty"],
 };
 
 // Extension host bundle

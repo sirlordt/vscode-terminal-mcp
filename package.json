@@ -2,7 +2,7 @@
   "name": "vscode-terminal-mcp",
   "displayName": "Terminal MCP Server",
   "description": "MCP server that provides visible terminal sessions in VSCode for Claude Code and subagents",
-  "version": "0.1.3",
+  "version": "0.1.5",
   "publisher": "sirlordt",
   "license": "MIT",
   "author": "sirlordt",

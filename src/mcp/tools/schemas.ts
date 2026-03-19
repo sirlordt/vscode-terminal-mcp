@@ -1,5 +1,15 @@
 import { z } from "zod";
 
+// z.coerce.boolean() converts "false" string to true (truthy).
+// This preprocessor handles string "false"/"true" correctly.
+const coerceBoolean = z.preprocess(
+  (val) => {
+    if (typeof val === "string") return val.toLowerCase() === "true";
+    return val;
+  },
+  z.boolean(),
+);
+
 export const terminalCreateSchema = z.object({
   name: z.string().min(1).describe("Display name for the terminal tab"),
   cwd: z.string().optional().describe("Working directory for the terminal"),
@@ -27,8 +37,7 @@ export const terminalExecuteSchema = z.object({
     .optional()
     .default(30000)
     .describe("Timeout in milliseconds (default: 30000, max: 300000)"),
-  waitForCompletion: z.coerce
-    .boolean()
+  waitForCompletion: coerceBoolean
     .optional()
     .default(true)
     .describe("Wait for command to complete before returning (default: true)"),
@@ -87,8 +96,7 @@ export const terminalRunSchema = z.object({
     .optional()
     .default(30000)
     .describe("Timeout in milliseconds (default: 30000, max: 300000)"),
-  waitForCompletion: z.coerce
-    .boolean()
+  waitForCompletion: coerceBoolean
     .optional()
     .default(true)
     .describe("Wait for command to complete before returning (default: true)"),

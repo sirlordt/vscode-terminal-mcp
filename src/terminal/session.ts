@@ -29,7 +29,6 @@ export class TerminalSession {
   private isActive = true;
   private lastCommandAt?: number;
   private shellReady: Promise<void>;
-  private resolveShellReady!: () => void;
 
   constructor(config: TerminalSessionConfig, maxOutputLines: number) {
     this.sessionId = generateSessionId();
@@ -40,7 +39,6 @@ export class TerminalSession {
     this.createdAt = Date.now();
     this.outputBuffer = createOutputBuffer(maxOutputLines);
 
-    // Create visible VSCode terminal
     const terminalOptions: vscode.TerminalOptions = {
       name: `MCP: ${config.name}`,
       cwd: this.cwd,
@@ -51,40 +49,20 @@ export class TerminalSession {
       terminalOptions.shellPath = config.shell;
     }
 
+    this.terminal = vscode.window.createTerminal(terminalOptions);
+    this.terminal.show(true);
+
+    // Wait 2 seconds for shell to fully initialize
     this.shellReady = new Promise<void>((resolve) => {
-      this.resolveShellReady = resolve;
+      resolve();
     });
 
-    this.terminal = vscode.window.createTerminal(terminalOptions);
-    this.terminal.show(true); // Show but don't take focus
-
-    // Setup shell integration output capture
     this.setupShellIntegrationCapture();
-
-    // Wait for shell integration to activate, or fallback timeout
-    if (vscode.window.onDidChangeTerminalShellIntegration) {
-      const disposable = vscode.window.onDidChangeTerminalShellIntegration((e) => {
-        if (e.terminal === this.terminal) {
-          disposable.dispose();
-          log(`Shell integration ready for session ${this.sessionId}`);
-          this.resolveShellReady();
-        }
-      });
-      // Fallback: resolve after 3s if shell integration never fires
-      setTimeout(() => {
-        disposable.dispose();
-        this.resolveShellReady();
-      }, 3000);
-    } else {
-      // No shell integration API: wait a fixed delay
-      setTimeout(() => this.resolveShellReady(), 1500);
-    }
 
     log(`Session ${this.sessionId} created: ${config.name} (cwd: ${this.cwd})`);
   }
 
   private setupShellIntegrationCapture(): void {
-    // Use Shell Integration API if available (VSCode 1.93+)
     if (vscode.window.onDidStartTerminalShellExecution) {
       this.shellExecutionDisposable =
         vscode.window.onDidStartTerminalShellExecution(async (event) => {
@@ -107,7 +85,6 @@ export class TerminalSession {
           }
         });
 
-      // Capture exit codes
       if (vscode.window.onDidEndTerminalShellExecution) {
         vscode.window.onDidEndTerminalShellExecution((event) => {
           if (event.terminal !== this.terminal) return;
@@ -119,6 +96,8 @@ export class TerminalSession {
             this.commandHistory.push(this.currentCommand);
             this.currentCommand = null;
           }
+          // Update lastCommandAt so the idle reaper doesn't kill the session immediately
+          this.lastCommandAt = Date.now();
 
           log(
             `Shell execution ended in session ${this.sessionId} with exit code: ${event.exitCode}`,
@@ -128,9 +107,6 @@ export class TerminalSession {
     }
   }
 
-  /**
-   * Execute a command in this terminal session.
-   */
   async execute(
     command: string,
     timeoutMs: number,
@@ -142,8 +118,9 @@ export class TerminalSession {
     timedOut: boolean;
     durationMs: number;
   }> {
-    // Wait for shell to be ready before first command
+    log(`Waiting for shell ready in session ${this.sessionId}...`);
     await this.shellReady;
+    log(`Shell ready, executing command in session ${this.sessionId}`);
 
     const commandId = generateCommandId();
     const startedAt = Date.now();
@@ -157,10 +134,8 @@ export class TerminalSession {
       outputStartLine: this.outputBuffer.lines.length,
     };
 
-    // Mark the output position before sending the command
     const outputStartIndex = this.outputBuffer.lines.length;
 
-    // Send command to terminal
     this.terminal.sendText(command, true);
 
     if (!waitForCompletion) {
@@ -173,7 +148,6 @@ export class TerminalSession {
       };
     }
 
-    // Wait for command completion or timeout
     return new Promise((resolve) => {
       let resolved = false;
 
@@ -202,7 +176,6 @@ export class TerminalSession {
         });
       }, timeoutMs);
 
-      // Watch for command completion via shell integration
       if (vscode.window.onDidEndTerminalShellExecution) {
         const disposable = vscode.window.onDidEndTerminalShellExecution(
           (event) => {
@@ -226,14 +199,11 @@ export class TerminalSession {
           },
         );
       } else {
-        // No shell integration: wait for a fixed delay then return
-        // (timeout will eventually fire if we don't detect completion)
         const pollInterval = setInterval(() => {
           if (resolved) {
             clearInterval(pollInterval);
             return;
           }
-          // Check if output has stabilized (no new lines for 2 seconds)
           const currentLines = this.outputBuffer.lines.length;
           setTimeout(() => {
             if (resolved) return;
@@ -260,9 +230,6 @@ export class TerminalSession {
     });
   }
 
-  /**
-   * Send text input to the terminal (for interactive commands).
-   */
   sendInput(input: string, pressEnter: boolean): void {
     this.terminal.sendText(input, pressEnter);
     this.lastCommandAt = Date.now();
@@ -271,9 +238,6 @@ export class TerminalSession {
     );
   }
 
-  /**
-   * Read output from the buffer with pagination.
-   */
   readOutput(
     offset: number = 0,
     maxLines: number = 500,
@@ -288,16 +252,10 @@ export class TerminalSession {
     return readFromBuffer(this.outputBuffer, offset, maxLines);
   }
 
-  /**
-   * Check if a command is currently executing.
-   */
   get isBusy(): boolean {
     return this.currentCommand !== null;
   }
 
-  /**
-   * Get session info for listing.
-   */
   getInfo(): TerminalSessionInfo {
     return {
       sessionId: this.sessionId,
@@ -311,25 +269,16 @@ export class TerminalSession {
     };
   }
 
-  /**
-   * Get the VSCode terminal instance (for matching events).
-   */
   getTerminal(): vscode.Terminal {
     return this.terminal;
   }
 
-  /**
-   * Check if session has been idle longer than the given duration.
-   */
   isIdle(idleThresholdMs: number): boolean {
     if (idleThresholdMs <= 0) return false;
     const lastActivity = this.lastCommandAt ?? this.createdAt;
     return Date.now() - lastActivity > idleThresholdMs;
   }
 
-  /**
-   * Close the terminal session.
-   */
   dispose(): void {
     this.isActive = false;
     this.shellExecutionDisposable?.dispose();

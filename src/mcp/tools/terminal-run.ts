@@ -10,6 +10,7 @@ export async function handleTerminalRun(
 
   // Try to reuse an existing session matching cwd and agentId that is not busy
   let sessionId: string | undefined;
+  let isNewSession = false;
   const existing = sessionManager.listSessions(input.agentId);
   for (const s of existing) {
     if (!s.isActive || (input.cwd && s.cwd !== input.cwd)) continue;
@@ -30,31 +31,38 @@ export async function handleTerminalRun(
       agentId: input.agentId,
     });
     sessionId = sessionInfo.sessionId;
+    isNewSession = true;
   }
 
+  if (isNewSession) {
+    return new Promise<McpToolResponse>((resolve) => {
+      setTimeout(async () => {
+        const result = await executeCommand(sessionId!, input, sessionManager);
+        resolve(result);
+      }, 500);
+    });
+  }
+
+  return executeCommand(sessionId, input, sessionManager);
+}
+
+async function executeCommand(
+  sessionId: string,
+  input: { command: string; timeoutMs?: number; waitForCompletion?: boolean },
+  sessionManager: SessionManager,
+): Promise<McpToolResponse> {
   const session = sessionManager.getSession(sessionId);
   if (!session) {
     return {
-      content: [
-        {
-          type: "text",
-          text: "Error: Failed to get terminal session.",
-        },
-      ],
+      content: [{ type: "text", text: "Error: Failed to get terminal session." }],
       isError: true,
     };
   }
 
-  // Validate command
   const validation = sessionManager.validateCommand(input.command);
   if (!validation.valid) {
     return {
-      content: [
-        {
-          type: "text",
-          text: `Command blocked: ${validation.reason}`,
-        },
-      ],
+      content: [{ type: "text", text: `Command blocked: ${validation.reason}` }],
       isError: true,
     };
   }
@@ -62,26 +70,22 @@ export async function handleTerminalRun(
   const timeoutMs = input.timeoutMs ?? sessionManager.getDefaultTimeout();
   const waitForCompletion = input.waitForCompletion ?? true;
 
-  const result = await session.execute(
-    input.command,
-    timeoutMs,
-    waitForCompletion,
-  );
+  const result = await session.execute(input.command, timeoutMs, waitForCompletion);
 
-  // Strip ANSI escape codes and clean up output
-  const cleanOutput = result.output
+  let cleanOutput = result.output
     .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "")
     .replace(/\x1b\][^\x07]*\x07/g, "")
     .replace(/\r\n/g, "\n")
     .replace(/\r/g, "")
     .trim();
 
-  const statusParts = [
-    `exit: ${result.exitCode ?? "n/a"}`,
-    `${result.durationMs}ms`,
-    sessionId,
-  ];
+  const lines = cleanOutput.split("\n");
+  if (lines.length > 0 && lines[0].trim() === input.command.trim()) {
+    lines.shift();
+    cleanOutput = lines.join("\n").trim();
+  }
 
+  const statusParts = [`exit: ${result.exitCode ?? "n/a"}`, `${result.durationMs}ms`, sessionId];
   let text = `$ ${input.command}\n${cleanOutput}\n\n[${statusParts.join(" | ")}]`;
 
   if (result.timedOut) {
@@ -89,12 +93,7 @@ export async function handleTerminalRun(
   }
 
   return {
-    content: [
-      {
-        type: "text",
-        text,
-      },
-    ],
+    content: [{ type: "text", text }],
     isError: result.exitCode !== null && result.exitCode !== 0,
   };
 }

@@ -23,23 +23,27 @@ export async function handleTerminalReadOutput(
 
   const result = session.readOutput(input.offset, input.lines);
 
+  const cleanOutput = result.lines
+    .join("\n")
+    .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "")
+    .replace(/\x1b\][^\x07]*\x07/g, "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "")
+    .trim();
+
+  const status = [
+    `lines: ${result.readFrom}-${result.readFrom + result.readCount}/${result.totalLines}`,
+    `remaining: ${result.remaining}`,
+    input.sessionId,
+  ];
+
+  const text = `${cleanOutput}\n\n[${status.join(" | ")}]`;
+
   return {
     content: [
       {
         type: "text",
-        text: JSON.stringify(
-          {
-            sessionId: input.sessionId,
-            readFrom: result.readFrom,
-            readCount: result.readCount,
-            totalLines: result.totalLines,
-            remaining: result.remaining,
-            isComplete: result.isComplete,
-            output: result.lines.join("\n"),
-          },
-          null,
-          2,
-        ),
+        text,
       },
     ],
   };

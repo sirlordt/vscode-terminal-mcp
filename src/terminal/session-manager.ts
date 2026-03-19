@@ -14,8 +14,7 @@ export class SessionManager {
   private idleReaperInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor() {
-    // Start idle session reaper
-    this.startIdleReaper();
+    // Idle reaper disabled - user closes sessions manually
 
     // Listen for terminals being closed externally
     vscode.window.onDidCloseTerminal((terminal) => {
@@ -55,6 +54,7 @@ export class SessionManager {
       if (config.idleTimeoutMs <= 0) return;
 
       for (const [id, session] of this.sessions) {
+        if (session.isBusy) continue; // Don't reap sessions with running commands
         if (session.isIdle(config.idleTimeoutMs)) {
           log(`Reaping idle session ${id}`);
           session.dispose();
