@@ -14,7 +14,19 @@ let statusBarItem: vscode.StatusBarItem | undefined;
 
 function getSocketPath(): string {
   const tmpDir = os.tmpdir();
-  return path.join(tmpDir, "vscode-terminal-mcp.sock");
+  // Use a hash based on the workspace to make the socket unique per VSCode window
+  const crypto = require("crypto");
+  const workspace = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || "";
+  const hash = crypto.createHash("md5").update(workspace).digest("hex").slice(0, 8);
+  const socketPath = path.join(tmpDir, `vscode-terminal-mcp-${hash}.sock`);
+  // Write the socket path to a well-known discovery file so mcp-entry.ts can find it
+  const discoveryPath = path.join(tmpDir, "vscode-terminal-mcp.discovery");
+  try {
+    fs.writeFileSync(discoveryPath, socketPath);
+  } catch {
+    // Ignore write errors
+  }
+  return socketPath;
 }
 
 function cleanupSocket(socketPath: string): void {

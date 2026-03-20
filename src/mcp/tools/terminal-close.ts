@@ -26,10 +26,7 @@ export async function handleTerminalClose(
     content: [
       {
         type: "text",
-        text: JSON.stringify({
-          status: "closed",
-          sessionId: input.sessionId,
-        }),
+        text: `Session closed: ${input.sessionId}`,
       },
     ],
   };

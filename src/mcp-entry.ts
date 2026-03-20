@@ -12,7 +12,25 @@ import * as net from "net";
 import * as path from "path";
 import * as os from "os";
 
-const SOCKET_PATH = path.join(os.tmpdir(), "vscode-terminal-mcp.sock");
+import * as fs from "fs";
+
+function getSocketPath(): string {
+  const tmpDir = os.tmpdir();
+  // Read the discovery file written by the extension to find the correct socket
+  const discoveryPath = path.join(tmpDir, "vscode-terminal-mcp.discovery");
+  try {
+    const socketPath = fs.readFileSync(discoveryPath, "utf8").trim();
+    if (socketPath && fs.existsSync(socketPath)) {
+      return socketPath;
+    }
+  } catch {
+    // Fall through to default
+  }
+  // Fallback to legacy path
+  return path.join(tmpDir, "vscode-terminal-mcp.sock");
+}
+
+const SOCKET_PATH = getSocketPath();
 const RECONNECT_DELAY_MS = 1000;
 const MAX_RECONNECT_ATTEMPTS = 30;
 

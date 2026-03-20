@@ -24,7 +24,11 @@ export async function handleTerminalRun(
   // Create new session only if no compatible one exists
   if (!sessionId) {
     const sessionInfo = sessionManager.createSession({
-      name: input.name ?? `run-${Date.now()}`,
+      name: input.name ?? (() => {
+        const d = new Date();
+        const pad = (n: number) => String(n).padStart(2, "0");
+        return `BashTerm-${pad(d.getFullYear() % 100)}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}-${pad(d.getHours())}-${pad(d.getMinutes())}`;
+      })(),
       cwd: input.cwd,
       env: input.env,
       shell: input.shell,

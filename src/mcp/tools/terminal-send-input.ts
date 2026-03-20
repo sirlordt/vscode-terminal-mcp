@@ -27,12 +27,7 @@ export async function handleTerminalSendInput(
     content: [
       {
         type: "text",
-        text: JSON.stringify({
-          status: "sent",
-          sessionId: input.sessionId,
-          inputLength: input.input.length,
-          pressedEnter: input.pressEnter ?? true,
-        }),
+        text: `Input sent to ${input.sessionId} (${input.input.length} chars${input.pressEnter ?? true ? " + Enter" : ""})`,
       },
     ],
   };

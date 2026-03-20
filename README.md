@@ -84,6 +84,20 @@ After installation, try asking:
 
 You should see a new terminal tab open in VSCode with the command output.
 
+## Screenshots
+
+### Running a command with `run`
+
+![Run command output](docs/images/run_finished.png)
+
+### Permission dialog for `exec`
+
+![Exec permission dialog](docs/images/ask_exec_permission.png)
+
+### Exec result with clean output
+
+![Exec finished](docs/images/exec_finished.png)
+
 ## Tools
 
 ### Quick Execution
@@ -254,12 +268,42 @@ grep "YOUR_UNIQUE_STRING" ~/.vscode/extensions/sirlordt.vscode-terminal-mcp-*/di
 md5sum dist/extension.js ~/.vscode/extensions/sirlordt.vscode-terminal-mcp-*/dist/extension.js
 ```
 
+## Large Output Handling
+
+When `read` returns output that exceeds the MCP client's token limit, the system automatically saves the full output to a temporary JSON file and returns the file path in the error message.
+
+To extract the relevant content:
+
+```bash
+# Get the last 50 lines (most relevant for status)
+tail -50 /path/to/saved/file.txt
+
+# Or parse the JSON to extract the text content
+python3 -c "import json; data=json.load(open('/path/to/file.txt')); print(data[0]['text'][-2000:])"
+```
+
+The file format is JSON: `[{"type": "text", "text": "..."}]`
+
+This commonly happens with commands that produce heavy TUI output (progress bars, ANSI escape codes). Use smaller `offset` values (e.g., `offset: -20` instead of `offset: -100`) to reduce the captured output size.
+
 ## How It Works
 
 1. The **VSCode extension** activates and starts an IPC server on a Unix socket
 2. The **MCP entry point** (`mcp-entry.js`) is spawned by the MCP client and bridges JSON-RPC stdio with the IPC socket
 3. Commands execute in real VSCode terminals using the **Shell Integration API** for reliable output capture and exit code detection
 4. Output is stored in circular buffers with pagination support for efficient reading
+
+## Latest Changes (0.1.6)
+
+- Screenshots in README for marketplace
+- Clean output format for all tools — no more raw JSON
+- Fixed `waitForCompletion: false` not working
+- Disabled idle reaper — user closes sessions manually
+- Unique IPC socket per workspace (multi-instance support)
+- Custom terminal tab names with date format
+- Large output handling documentation
+
+See [CHANGELOG.md](CHANGELOG.md) for full history.
 
 ## License
 

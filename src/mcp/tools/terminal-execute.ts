@@ -44,25 +44,33 @@ export async function handleTerminalExecute(
     waitForCompletion,
   );
 
-  const response: Record<string, unknown> = {
-    sessionId: input.sessionId,
-    commandId: result.commandId,
-    exitCode: result.exitCode,
-    timedOut: result.timedOut,
-    durationMs: result.durationMs,
-    output: result.output,
-  };
+  let cleanOutput = result.output
+    .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "")
+    .replace(/\x1b\][^\x07]*\x07/g, "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "")
+    .trim();
+
+  const lines = cleanOutput.split("\n");
+  if (lines.length > 0 && lines[0].trim() === input.command.trim()) {
+    lines.shift();
+    cleanOutput = lines.join("\n").trim();
+  }
+
+  const statusParts = [`exit: ${result.exitCode ?? "n/a"}`, `${result.durationMs}ms`, input.sessionId];
+  let text = `$ ${input.command}\n${cleanOutput}\n\n[${statusParts.join(" | ")}]`;
 
   if (result.timedOut) {
-    response.warning = `Command timed out after ${timeoutMs}ms. Output may be incomplete. The terminal session is still active.`;
+    text += `\n[TIMED OUT after ${timeoutMs}ms - session still active, use read to get more output]`;
   }
 
   return {
     content: [
       {
         type: "text",
-        text: JSON.stringify(response, null, 2),
+        text,
       },
     ],
+    isError: result.exitCode !== null && result.exitCode !== 0,
   };
 }

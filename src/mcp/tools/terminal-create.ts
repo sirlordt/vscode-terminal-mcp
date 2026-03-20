@@ -16,21 +16,14 @@ export async function handleTerminalCreate(
     agentId: input.agentId,
   });
 
+  const parts = [`Terminal created: ${sessionInfo.name}`, `session: ${sessionInfo.sessionId}`, `cwd: ${sessionInfo.cwd}`];
+  if (sessionInfo.agentId) parts.push(`agent: ${sessionInfo.agentId}`);
+
   return {
     content: [
       {
         type: "text",
-        text: JSON.stringify(
-          {
-            status: "created",
-            sessionId: sessionInfo.sessionId,
-            name: sessionInfo.name,
-            cwd: sessionInfo.cwd,
-            agentId: sessionInfo.agentId,
-          },
-          null,
-          2,
-        ),
+        text: parts.join(" | "),
       },
     ],
   };
