@@ -15,22 +15,28 @@ import * as os from "os";
 import * as fs from "fs";
 
 function getSocketPath(): string {
-  const tmpDir = os.tmpdir();
-  // Read the discovery file written by the extension to find the correct socket
-  const discoveryPath = path.join(tmpDir, "vscode-terminal-mcp.discovery");
+  // Discovery file is written by the extension host on activation.
+  // We read it fresh on every call so reconnect attempts pick up the
+  // correct path even if the extension activates after mcp-entry starts.
+  const discoveryPath = path.join(os.homedir(), ".vscode-terminal-mcp.discovery");
   try {
     const socketPath = fs.readFileSync(discoveryPath, "utf8").trim();
-    if (socketPath && fs.existsSync(socketPath)) {
+    // NOTE: Do NOT use fs.existsSync here – it returns false for Windows
+    // Named Pipes (\\\\.\\ pipe\\...) even when the pipe is alive.
+    if (socketPath) {
       return socketPath;
     }
   } catch {
     // Fall through to default
   }
-  // Fallback to legacy path
-  return path.join(tmpDir, "vscode-terminal-mcp.sock");
+  // Fallback: reconstruct the path the extension would have used
+  const crypto = require("crypto");
+  const hash = crypto.createHash("md5").update("").digest("hex").slice(0, 8);
+  if (process.platform === "win32") {
+    return `\\\\.\\pipe\\vscode-terminal-mcp-${hash}`;
+  }
+  return path.join(os.tmpdir(), `vscode-terminal-mcp-${hash}.sock`);
 }
-
-const SOCKET_PATH = getSocketPath();
 const RECONNECT_DELAY_MS = 1000;
 const MAX_RECONNECT_ATTEMPTS = 30;
 
@@ -64,7 +70,10 @@ class StdioToIpcBridge {
   private async connectToExtension(): Promise<void> {
     return new Promise((resolve, reject) => {
       const attempt = () => {
-        this.socket = net.createConnection(SOCKET_PATH, () => {
+        // Re-read socket path on every attempt so we pick up the discovery
+        // file written by the extension even if it activated late.
+        const socketPath = getSocketPath();
+        this.socket = net.createConnection(socketPath, () => {
           this.connected = true;
           this.reconnectAttempts = 0;
           this.setupSocketListeners();
@@ -129,17 +138,17 @@ class StdioToIpcBridge {
   }
 
   private handleIpcResponse(ipcResponse: {
-    id: string;
+    id: string | number;
     result?: unknown;
     error?: { code: number; message: string; data?: unknown };
   }): void {
-    const pending = this.pendingRequests.get(ipcResponse.id);
+    const pending = this.pendingRequests.get(String(ipcResponse.id));
     if (!pending) {
       // This might be a notification or unknown response
       return;
     }
 
-    this.pendingRequests.delete(ipcResponse.id);
+    this.pendingRequests.delete(String(ipcResponse.id));
 
     if (ipcResponse.error) {
       // Build JSON-RPC error response
@@ -207,15 +216,21 @@ class StdioToIpcBridge {
       return;
     }
 
-    // Forward to extension host via IPC
+    // Forward to extension host via IPC.
+    // IMPORTANT: preserve the original id type (number or string).
+    // Converting to String here causes a type mismatch: the MCP client
+    // sends id:1 (number) and expects id:1 back, but if we stringify it
+    // the response arrives as id:"1" and the client silently drops it,
+    // resulting in tools never appearing in the agent.
+    const rawId = message.id ?? `notif-${Date.now()}`;
     const ipcRequest = {
-      id: String(message.id ?? `notif-${Date.now()}`),
+      id: rawId,
       method: message.method,
       params: message.params,
     };
 
     if (message.id !== undefined) {
-      this.pendingRequests.set(ipcRequest.id, {
+      this.pendingRequests.set(String(rawId), {
         resolve: () => {},
         reject: (err) => {
           const errorResponse: JsonRpcMessage = {
