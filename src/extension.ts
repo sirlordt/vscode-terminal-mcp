@@ -3,6 +3,7 @@ import * as net from "net";
 import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
+import * as crypto from "crypto";
 import { initLogger, log, logError, disposeLogger } from "./utils/logger.js";
 import { createMcpRequestHandler } from "./mcp/server.js";
 import { SessionManager } from "./terminal/session-manager.js";
@@ -13,23 +14,33 @@ let sessionManager: SessionManager | undefined;
 let statusBarItem: vscode.StatusBarItem | undefined;
 
 function getSocketPath(): string {
-  const tmpDir = os.tmpdir();
-  // Use a hash based on the workspace to make the socket unique per VSCode window
-  const crypto = require("crypto");
   const workspace = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || "";
   const hash = crypto.createHash("md5").update(workspace).digest("hex").slice(0, 8);
-  const socketPath = path.join(tmpDir, `vscode-terminal-mcp-${hash}.sock`);
-  // Write the socket path to a well-known discovery file so mcp-entry.ts can find it
-  const discoveryPath = path.join(tmpDir, "vscode-terminal-mcp.discovery");
+
+  // Windows does not support Unix domain sockets. Use Named Pipes instead.
+  if (process.platform === "win32") {
+    return `\\\\.\\pipe\\vscode-terminal-mcp-${hash}`;
+  }
+  return path.join(os.tmpdir(), `vscode-terminal-mcp-${hash}.sock`);
+}
+
+function getDiscoveryPath(): string {
+  // Store the discovery file in the user home dir so it persists across
+  // temp-dir cleanups and is readable by mcp-entry regardless of platform.
+  return path.join(os.homedir(), ".vscode-terminal-mcp.discovery");
+}
+
+function writeDiscovery(socketPath: string): void {
   try {
-    fs.writeFileSync(discoveryPath, socketPath);
+    fs.writeFileSync(getDiscoveryPath(), socketPath, "utf8");
   } catch {
     // Ignore write errors
   }
-  return socketPath;
 }
 
 function cleanupSocket(socketPath: string): void {
+  // Named Pipes on Windows are managed by the OS; no file to delete.
+  if (process.platform === "win32") return;
   try {
     if (fs.existsSync(socketPath)) {
       fs.unlinkSync(socketPath);
@@ -70,6 +81,7 @@ export function activate(context: vscode.ExtensionContext): void {
   // Setup IPC server
   const socketPath = getSocketPath();
   cleanupSocket(socketPath);
+  writeDiscovery(socketPath);
 
   ipcServer = net.createServer((connection) => {
     log("IPC client connected");
